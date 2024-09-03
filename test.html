@@ -36,22 +36,36 @@
         const predictionEl = document.getElementById('prediction');
         const clearButton = document.getElementById('clear-button');
 
+        let drawing = false;
+        let timeout;
+
         // Initialize canvas
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        let drawing = false;
-
-        canvas.addEventListener('mousedown', () => drawing = true);
-        canvas.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mousemove', draw);
 
         clearButton.addEventListener('click', clearCanvas);
 
         async function loadModel() {
             // Load the pre-trained MNIST model from the local directory
-            const model = await tf.loadLayersModel('./model/model.json');
+            const model = await tf.loadLayersModel('model/model.json');
             return model;
+        }
+
+        function startDrawing(event) {
+            drawing = true;
+            ctx.beginPath();
+            ctx.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+        }
+
+        function stopDrawing() {
+            drawing = false;
+            ctx.closePath();
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(recognizeDigit, 500); // 500ms delay after drawing stops
         }
 
         function draw(event) {
@@ -63,10 +77,6 @@
 
             ctx.lineTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
             ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
-
-            recognizeDigit();
         }
 
         function clearCanvas() {
