@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Digit Recognition</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+        #result {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+        #clear-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>MNIST Digit Recognition</h1>
+    <canvas id="canvas" width="280" height="280"></canvas>
+    <div id="result">Recognized Number: <span id="prediction">?</span></div>
+    <button id="clear-button">Clear</button>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const predictionEl = document.getElementById('prediction');
+        const clearButton = document.getElementById('clear-button');
+
+        // Initialize canvas
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        let drawing = false;
+
+        canvas.addEventListener('mousedown', () => drawing = true);
+        canvas.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mousemove', draw);
+
+        clearButton.addEventListener('click', clearCanvas);
+
+        async function loadModel() {
+            // Load the pre-trained MNIST model from the local directory
+            const model = await tf.loadLayersModel('./model/model.json');
+            return model;
+        }
+
+        function draw(event) {
+            if (!drawing) return;
+
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'white';
+
+            ctx.lineTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+
+            recognizeDigit();
+        }
+
+        function clearCanvas() {
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            predictionEl.textContent = '?';
+        }
+
+        async function recognizeDigit() {
+            // Preprocess the canvas data for the model
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const imgTensor = tf.browser.fromPixels(imgData, 1)
+                .resizeNearestNeighbor([28, 28])
+                .mean(2)
+                .toFloat()
+                .div(tf.scalar(255.0))
+                .expandDims(0)
+                .expandDims(-1);
+
+            // Load the model
+            const model = await loadModel();
+
+            // Predict the digit
+            const prediction = model.predict(imgTensor);
+            const predictedValue = prediction.argMax(1).dataSync()[0];
+
+            predictionEl.textContent = predictedValue;
+        }
+    </script>
+</body>
+</html>
