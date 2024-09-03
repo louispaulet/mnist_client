@@ -5,7 +5,7 @@ const Canvas = ({ setPrediction }) => {
   const canvasRef = useRef(null);
   const [model, setModel] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [timeoutId, setTimeoutId] = useState(null);
+  const [animationFrameId, setAnimationFrameId] = useState(null);
 
   useEffect(() => {
     // Load the model when the component mounts
@@ -19,37 +19,7 @@ const Canvas = ({ setPrediction }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
 
-    const startDrawing = (event) => {
-      event.preventDefault();
-      const { offsetX, offsetY } = getEventCoordinates(event);
-      const ctx = getCanvasContext();
-      ctx.beginPath();
-      ctx.moveTo(offsetX, offsetY);
-      setIsDrawing(true);
-    };
-
-    const finishDrawing = (event) => {
-      event.preventDefault();
-      const ctx = getCanvasContext();
-      ctx.closePath();
-      setIsDrawing(false);
-      if (timeoutId) clearTimeout(timeoutId);
-      setTimeoutId(setTimeout(recognizeDigit, 500)); // Delay inference
-    };
-
-    const draw = (event) => {
-      if (!isDrawing) return;
-      event.preventDefault();
-      const { offsetX, offsetY } = getEventCoordinates(event);
-      const ctx = getCanvasContext();
-      ctx.lineWidth = 20;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = 'white';
-      ctx.lineTo(offsetX, offsetY);
-      ctx.stroke();
-    };
-
-    // Add event listeners with { passive: false }
+    // Add touch event listeners with { passive: false }
     canvas.addEventListener('touchstart', startDrawing, { passive: false });
     canvas.addEventListener('touchmove', draw, { passive: false });
     canvas.addEventListener('touchend', finishDrawing, { passive: false });
@@ -59,27 +29,66 @@ const Canvas = ({ setPrediction }) => {
       canvas.removeEventListener('touchstart', startDrawing);
       canvas.removeEventListener('touchmove', draw);
       canvas.removeEventListener('touchend', finishDrawing);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
-  }, [isDrawing, timeoutId]);
+  }, [isDrawing, animationFrameId]);
 
   const getCanvasContext = () => {
-    return canvasRef.current.getContext('2d');
+    return canvasRef.current.getContext('2d', { willReadFrequently: true });
   };
 
   const getEventCoordinates = (event) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
     if (event.touches) {
       const touch = event.touches[0];
-      const rect = canvasRef.current.getBoundingClientRect();
       return {
         offsetX: touch.clientX - rect.left,
         offsetY: touch.clientY - rect.top,
       };
     } else {
       return {
-        offsetX: event.offsetX,
-        offsetY: event.offsetY,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
       };
     }
+  };
+
+  const startDrawing = (event) => {
+    event.preventDefault();
+    const { offsetX, offsetY } = getEventCoordinates(event);
+    const ctx = getCanvasContext();
+    ctx.beginPath();
+    ctx.moveTo(offsetX, offsetY);
+    setIsDrawing(true);
+  };
+
+  const draw = (event) => {
+    if (!isDrawing) return;
+    event.preventDefault();
+    const { offsetX, offsetY } = getEventCoordinates(event);
+    const ctx = getCanvasContext();
+    ctx.lineWidth = 20;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'white';
+    ctx.lineTo(offsetX, offsetY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(offsetX, offsetY);
+  };
+
+  const finishDrawing = (event) => {
+    event.preventDefault();
+    const ctx = getCanvasContext();
+    ctx.closePath();
+    setIsDrawing(false);
+
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+    }
+    setAnimationFrameId(requestAnimationFrame(recognizeDigit));
   };
 
   const recognizeDigit = async () => {
@@ -110,16 +119,16 @@ const Canvas = ({ setPrediction }) => {
   };
 
   useEffect(() => {
-    clearCanvas();
+    clearCanvas(); // Ensure the canvas is cleared and black before drawing starts
   }, []);
 
   return (
     <div className="flex flex-col items-center">
       <canvas
         ref={canvasRef}
-        onMouseDown={(event) => startDrawing(event)}
-        onMouseUp={(event) => finishDrawing(event)}
-        onMouseMove={(event) => draw(event)}
+        onMouseDown={startDrawing}
+        onMouseUp={finishDrawing}
+        onMouseMove={draw}
         width={280}
         height={280}
         className="border border-gray-400 mb-4"
